@@ -42,6 +42,7 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
         run: |
+          sudo apt-get install -y -qq dpkg-dev apt-utils
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           mkdir site && cp dist/*.deb site/ && cd site
           dpkg-scanpackages --multiversion . /dev/null > Packages
