@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Personal Kanban + todo desktop app (Electron, Linux/X11). The UI language is Greek.
+Personal Kanban + todo desktop app (Electron, Linux/X11). The UI is Greek by default, with English selectable in Settings (`state.lang`). Every UI string goes through `t('ελληνικά', 'English')`; static HTML text uses `data-en` / `data-en-ph`. Switching language reloads the page.
 
 ## Commands
 

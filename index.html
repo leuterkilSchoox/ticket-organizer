@@ -59,44 +59,47 @@
 <header>
   <button id="tabKanban" class="active">Kanban</button>
   <button id="tabTodo">Todo</button>
-  <button id="tabSettings">Ρυθμίσεις</button>
-  <button id="addCol">+ Στήλη</button>
-  <button id="enableNotif" hidden>Ενεργοποίηση ειδοποιήσεων</button>
+  <button id="tabSettings" data-en="Settings">Ρυθμίσεις</button>
+  <button id="addCol" data-en="+ Column">+ Στήλη</button>
+  <button id="enableNotif" hidden data-en="Enable notifications">Ενεργοποίηση ειδοποιήσεων</button>
   <span class="colors" id="colors"></span>
 </header>
 <div id="spacebar"></div>
 <main id="kanban"></main>
 <main id="todo" hidden>
-  <form id="todoForm"><input id="todoInput" placeholder="Νέο todo…" style="width:100%"></form>
+  <form id="todoForm"><input id="todoInput" placeholder="Νέο todo…" data-en-ph="New todo…" style="width:100%"></form>
   <ul id="todoList" style="padding:0"></ul>
 </main>
 <main id="settings" hidden>
-  <label>Θέμα
+  <label><span data-en="Language">Γλώσσα</span>
+    <select id="lang"><option value="el">Ελληνικά</option><option value="en">English</option></select>
+  </label>
+  <label><span data-en="Theme">Θέμα</span>
     <select id="theme"></select>
   </label>
   <div id="customTheme"></div>
   <label>Jira URL
     <input id="jiraUrl">
-    <small>Ο κωδικός του ticket (π.χ. ISTA-1234) μπαίνει στο τέλος. Δέχεται και paste ενός link ticket.</small>
+    <small data-en="The ticket key (e.g. ISTA-1234) is appended. You can also paste a ticket link.">Ο κωδικός του ticket (π.χ. ISTA-1234) μπαίνει στο τέλος. Δέχεται και paste ενός link ticket.</small>
   </label>
   <label>PR URL (default repo)
     <input id="prUrl">
-    <small>Ο αριθμός του PR μπαίνει στο τέλος. Δέχεται και paste ενός link PR. Για άλλο repo στην κάρτα γράφεις &lt;repo&gt;#123.</small>
+    <small data-en="The PR number is appended. You can also paste a PR link. For another repo, write &lt;repo&gt;#123 on the card.">Ο αριθμός του PR μπαίνει στο τέλος. Δέχεται και paste ενός link PR. Για άλλο repo στην κάρτα γράφεις &lt;repo&gt;#123.</small>
   </label>
   <label>Jenkins URL
     <input id="jenkinsUrl">
-    <small>Το branch του ticket μπαίνει στο τέλος. Δέχεται και paste ενός link job.</small>
+    <small data-en="The ticket's branch is appended. You can also paste a job link.">Το branch του ticket μπαίνει στο τέλος. Δέχεται και paste ενός link job.</small>
   </label>
   <label>Jira email
     <input id="jiraEmail">
   </label>
   <label>Jira API token
     <input id="jiraToken" type="password">
-    <small>Από id.atlassian.com → Security → API tokens. Αποθηκεύεται κρυπτογραφημένο.</small>
+    <small data-en="From id.atlassian.com → Security → API tokens. Stored encrypted.">Από id.atlassian.com → Security → API tokens. Αποθηκεύεται κρυπτογραφημένο.</small>
   </label>
-  <label>Jira JQL για νέα tickets
+  <label><span data-en="Jira JQL for new tickets">Jira JQL για νέα tickets</span>
     <textarea id="jiraJql"></textarea>
-    <small>Κάθε 5 λεπτά, όσα tickets δεν υπάρχουν σε κάρτα (με βάση το key στον τίτλο) μπαίνουν στη στήλη Backlog (ή στην πρώτη στήλη) του project που έχει το prefix τους στα Jira keys (αλλιώς του πρώτου project).</small>
+    <small data-en="Every 5 minutes, tickets not already on a card (matched by the key in the title) go into the Backlog column (or the first column) of the project whose Jira keys include their prefix (else the first project).">Κάθε 5 λεπτά, όσα tickets δεν υπάρχουν σε κάρτα (με βάση το key στον τίτλο) μπαίνουν στη στήλη Backlog (ή στην πρώτη στήλη) του project που έχει το prefix τους στα Jira keys (αλλιώς του πρώτου project).</small>
     <small id="jiraStatus"></small>
   </label>
   <p class="error" id="settingsError"></p>
@@ -132,6 +135,8 @@ let state = JSON.parse(localStorage.getItem(KEY) || 'null') || {
   todos: [],
   colors: { low: '#4caf50', medium: '#ffb300', high: '#f4511e', critical: '#b71c1c' },
 };
+// UI language: Greek unless the user picked English in Settings (switching reloads the page)
+const t = (el, en) => state.lang === 'en' ? en : el;
 // defaults first so settings added later also reach older saves
 state.settings = {
   jiraUrl: 'https://your-company.atlassian.net/browse/',
@@ -155,8 +160,8 @@ const h = (tag, props = {}, ...kids) => { const el = Object.assign(document.crea
 function confirmBtn(title, onConfirm) {
   return h('button', { className: 'del', title, textContent: '✕', onclick(e) {
     const btn = e.currentTarget;
-    if (btn.textContent === 'Σίγουρα;') return onConfirm();
-    btn.textContent = 'Σίγουρα;';
+    if (btn.textContent === t('Σίγουρα;', 'Sure?')) return onConfirm();
+    btn.textContent = t('Σίγουρα;', 'Sure?');
     setTimeout(() => { btn.textContent = '✕'; }, 3000);
   } });
 }
@@ -191,13 +196,13 @@ function notify(col, card) {
 
 function renderColors() {
   const box = document.getElementById('colors');
-  box.replaceChildren('Χρώματα priority:', ...PRIORITIES.map(p => h('label', {}, p + ' ',
+  box.replaceChildren(t('Χρώματα priority:', 'Priority colors:'), ...PRIORITIES.map(p => h('label', {}, p + ' ',
     h('input', { type: 'color', value: state.colors[p], oninput(e) { state.colors[p] = e.target.value; save(); renderKanban(); } }))));
 }
 
 function jiraLink(title) {
   const key = title.match(/\b[A-Z][A-Z0-9]+-\d+\b/)?.[0];
-  return key ? link(state.settings.jiraUrl + key, `Άνοιγμα ${key} στο Jira`) : '';
+  return key ? link(state.settings.jiraUrl + key, t(`Άνοιγμα ${key} στο Jira`, `Open ${key} in Jira`)) : '';
 }
 
 // card.pr is a ", "-separated list of "2419" (default repo from settings.prUrl) or "<repo>#<number>" for another repo of the same org
@@ -228,7 +233,7 @@ function normalizeSetting(id, value) {
   const pr = v.replace(/\/pull(\/\d+)?.*$/, '/pull/');
   return /^https:\/\/.+\/[^/]+\/pull\/$/.test(pr) ? pr : null;
 }
-const THEME_VARS = { bg: 'Φόντο', col: 'Στήλες', surface: 'Κάρτες / πεδία', text: 'Κείμενο', muted: 'Δευτερεύον κείμενο', border: 'Περιγράμματα', accent: 'Links / έμφαση' };
+const THEME_VARS = { bg: t('Φόντο', 'Background'), col: t('Στήλες', 'Columns'), surface: t('Κάρτες / πεδία', 'Cards / fields'), text: t('Κείμενο', 'Text'), muted: t('Δευτερεύον κείμενο', 'Secondary text'), border: t('Περιγράμματα', 'Borders'), accent: t('Links / έμφαση', 'Links / accent') };
 const THEMES = {
   light: { name: 'Light', bg: '#f4f5f7', col: '#ebecf0', surface: '#ffffff', text: '#172b4d', muted: '#6b778c', border: '#cccccc', accent: '#0052cc' },
   'catppuccin-latte': { name: 'Catppuccin Latte', bg: '#e6e9ef', col: '#dce0e8', surface: '#eff1f5', text: '#4c4f69', muted: '#7c7f93', border: '#bcc0cc', accent: '#1e66f5' },
@@ -263,19 +268,28 @@ themeSelect.onchange = () => {
 };
 applyTheme();
 
+const langSelect = document.getElementById('lang');
+langSelect.value = state.lang || 'el';
+langSelect.onchange = () => { state.lang = langSelect.value; save(); location.reload(); };
+document.documentElement.lang = langSelect.value;
+if (state.lang === 'en') {
+  for (const el of document.querySelectorAll('[data-en]')) el.textContent = el.dataset.en;
+  for (const el of document.querySelectorAll('[data-en-ph]')) el.placeholder = el.dataset.enPh;
+}
+
 for (const id of ['jiraUrl', 'prUrl', 'jenkinsUrl', 'jiraEmail', 'jiraJql']) {
   const input = document.getElementById(id);
   input.value = state.settings[id];
   input.onchange = () => {
     const v = normalizeSetting(id, input.value);
-    document.getElementById('settingsError').textContent = v ? '' : `Μη έγκυρη τιμή: ${input.value}`;
+    document.getElementById('settingsError').textContent = v ? '' : `${t('Μη έγκυρη τιμή', 'Invalid value')}: ${input.value}`;
     if (v) { state.settings[id] = v; save(); renderKanban(); }
     input.value = state.settings[id];
   };
 }
 
 const tokenInput = document.getElementById('jiraToken');
-const showToken = () => jira.hasToken().then(has => { tokenInput.placeholder = has ? 'Αποθηκευμένο — γράψε νέο για αλλαγή' : ''; });
+const showToken = () => jira.hasToken().then(has => { tokenInput.placeholder = has ? t('Αποθηκευμένο — γράψε νέο για αλλαγή', 'Saved — type a new one to change it') : ''; });
 tokenInput.onchange = () => {
   const token = tokenInput.value.trim();
   tokenInput.value = '';
@@ -299,12 +313,12 @@ async function syncJira() {
     const added = issues.filter(i => colFor(i.key) && !state.cards.some(c => new RegExp(`\\b${i.key}\\b`, 'i').test(c.title)));
     for (const i of added) {
       state.cards.push({ id: uid(), col: colFor(i.key).id, title: `${i.key} ${i.summary}`, notes: '', branch: '', pr: '', priority: 'medium' });
-      if (Notification.permission === 'granted') new Notification('Νέο Jira ticket', { body: `${i.key} ${i.summary}` });
+      if (Notification.permission === 'granted') new Notification(t('Νέο Jira ticket', 'New Jira ticket'), { body: `${i.key} ${i.summary}` });
     }
     if (added.length) { save(); renderKanban(); }
-    status.textContent = `Τελευταίος έλεγχος ${new Date().toLocaleTimeString()}: ${added.length} νέα`;
+    status.textContent = t(`Τελευταίος έλεγχος ${new Date().toLocaleTimeString()}: ${added.length} νέα`, `Last check ${new Date().toLocaleTimeString()}: ${added.length} new`);
   } catch (e) {
-    status.textContent = `Σφάλμα Jira: ${e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`;
+    status.textContent = `${t('Σφάλμα Jira', 'Jira error')}: ${e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`;
   }
 }
 setInterval(syncJira, 5 * 60e3);
@@ -323,7 +337,7 @@ const rerender = () => pointerDown ? (renderPending = true) : renderKanban();
 const link = (href, title) => h('a', { className: 'jira', href, target: '_blank', textContent: '↗', title });
 
 function copyBtn(getValue) {
-  return h('button', { className: 'del', title: 'Αντιγραφή branch', textContent: '⧉', onclick(e) {
+  return h('button', { className: 'del', title: t('Αντιγραφή branch', 'Copy branch'), textContent: '⧉', onclick(e) {
     const btn = e.currentTarget, value = getValue().trim();
     if (!value) return;
     navigator.clipboard.writeText(value).then(() => {
@@ -335,13 +349,14 @@ function copyBtn(getValue) {
 
 // closed (default): read-only PR/branch line; open: editable priority, PR and branch. Notes show in both.
 function renderCard(card) {
-  const prLink = pr => link(prUrl(pr), `Άνοιγμα PR ${prUrl(pr)}`);
-  const jenkinsLink = card.branch ? link(state.settings.jenkinsUrl + encodeURIComponent(card.branch) + '/', 'Άνοιγμα στο Jenkins') : '';
+  const prLink = pr => link(prUrl(pr), t(`Άνοιγμα PR ${prUrl(pr)}`, `Open PR ${prUrl(pr)}`));
+  const jenkinsLink = card.branch ? link(state.settings.jenkinsUrl + encodeURIComponent(card.branch) + '/', t('Άνοιγμα στο Jenkins', 'Open in Jenkins')) : '';
   const details = card.open ? [
     h('div', { className: 'meta' },
       h('select', { onchange(e) { card.priority = e.target.value; save(); renderKanban(); } },
         ...PRIORITIES.map(p => h('option', { value: p, selected: p === card.priority }, p))),
-      h('input', { className: 'pr', placeholder: 'PR # ή URL (πολλά με κόμμα)', title: '2419 = default repo, <repo>#123 ή paste του URL για άλλο repo. Πολλά PRs χωρισμένα με κόμμα',
+      h('input', { className: 'pr', placeholder: t('PR # ή URL (πολλά με κόμμα)', 'PR # or URL (comma-separated)'),
+        title: t('2419 = default repo, <repo>#123 ή paste του URL για άλλο repo. Πολλά PRs χωρισμένα με κόμμα', '2419 = default repo, <repo>#123 or paste the URL for another repo. Separate multiple PRs with commas'),
         value: card.pr ?? '', onchange(e) { card.pr = parsePrs(e.target.value); save(); rerender(); } }),
       ...prList(card.pr).map(prLink)),
     h('div', { className: 'meta' },
@@ -355,11 +370,11 @@ function renderCard(card) {
         ...sprintOptions(card.sprint).map(s => h('option', { value: s, selected: s === card.sprint }, sprintLabel(s))))),
       h('label', {}, h('input', { type: 'checkbox', checked: !!card.ukg, onchange(e) { card.ukg = e.target.checked; save(); } }), ' UKG flag')),
     h('div', { className: 'meta' },
-      h('label', {}, 'Υπενθύμιση ', h('input', { type: 'datetime-local', value: card.remind ?? '', onchange(e) { card.remind = e.target.value; save(); } }))),
+      h('label', {}, t('Υπενθύμιση ', 'Reminder '), h('input', { type: 'datetime-local', value: card.remind ?? '', onchange(e) { card.remind = e.target.value; save(); } }))),
   ] : [
-    card.remind ? h('div', { className: 'summary' }, h('span', { title: 'Υπενθύμιση' }, `⏰ ${fmtDate(card.remind.slice(0, 10))} ${card.remind.slice(11)}`)) : '',
+    card.remind ? h('div', { className: 'summary' }, h('span', { title: t('Υπενθύμιση', 'Reminder') }, `⏰ ${fmtDate(card.remind.slice(0, 10))} ${card.remind.slice(11)}`)) : '',
     card.due || card.sprint || card.ukg ? h('div', { className: 'summary' },
-      card.ukg ? h('span', { title: 'Χρειάζεται UKG flag' }, '⚑ UKG') : '',
+      card.ukg ? h('span', { title: t('Χρειάζεται UKG flag', 'Needs UKG flag') }, '⚑ UKG') : '',
       card.due ? h('span', { title: 'Due date' }, '📅 ' + fmtDate(card.due)) : '',
       card.sprint ? h('span', { title: 'Sprint' }, 'Sprint ' + sprintLabel(card.sprint)) : '') : '',
     card.pr || card.branch ? h('div', { className: 'summary' },
@@ -372,17 +387,17 @@ function renderCard(card) {
     className: 'card', style: `border-left-color:${state.colors[card.priority]}; background:${state.colors[card.priority]}18`,
   },
     h('div', { className: 'row' },
-      dragHandle('Σύρε για να μετακινήσεις το ticket', target => {
+      dragHandle(t('Σύρε για να μετακινήσεις το ticket', 'Drag to move the ticket'), target => {
         if (target.id === card.col) return;
         card.col = target.id; save(); renderKanban(); notify(target, card);
       }),
-      h('button', { className: 'del toggle', textContent: card.open ? '▾' : '▸', title: card.open ? 'Λιγότερα' : 'Περισσότερα',
+      h('button', { className: 'del toggle', textContent: card.open ? '▾' : '▸', title: card.open ? t('Λιγότερα', 'Less') : t('Περισσότερα', 'More'),
         onclick() { card.open = !card.open; save(); renderKanban(); } }),
       h('input', { value: card.title, onchange(e) { card.title = e.target.value; save(); rerender(); } }),
       jiraLink(card.title),
-      confirmBtn('Διαγραφή', () => { state.cards = state.cards.filter(c => c !== card); save(); renderKanban(); })),
+      confirmBtn(t('Διαγραφή', 'Delete'), () => { state.cards = state.cards.filter(c => c !== card); save(); renderKanban(); })),
     ...details,
-    h('textarea', { placeholder: 'Σημειώσεις…', value: card.notes, onchange(e) { card.notes = e.target.value; save(); } }));
+    h('textarea', { placeholder: t('Σημειώσεις…', 'Notes…'), value: card.notes, onchange(e) { card.notes = e.target.value; save(); } }));
 }
 
 // project spaces: each owns the columns with col.space === its id (cards follow their column)
@@ -391,16 +406,16 @@ function renderSpaces() {
   const go = id => { state.space = id; save(); renderKanban(); };
   document.getElementById('spacebar').replaceChildren(
     ...state.spaces.map(s => h('button', { className: s === sp ? 'active' : '', textContent: s.name || '—', onclick: () => go(s.id) })),
-    h('button', { textContent: '+ Project', title: 'Νέο project με τις ίδιες στήλες (χωρίς tickets)', onclick() {
-      const s = { id: uid(), name: 'Νέο project', keys: '' };
+    h('button', { textContent: '+ Project', title: t('Νέο project με τις ίδιες στήλες (χωρίς tickets)', 'New project with the same columns (no tickets)'), onclick() {
+      const s = { id: uid(), name: t('Νέο project', 'New project'), keys: '' };
       state.spaces.push(s);
       state.columns.push(...spaceCols(sp.id).map(c => ({ ...c, id: uid(), space: s.id })));
       go(s.id);
     } }),
-    h('label', { className: 'push' }, 'Όνομα ', h('input', { value: sp.name, onchange(e) { sp.name = e.target.value.trim(); save(); rerender(); } })),
-    h('label', { title: 'Τα νέα Jira tickets με αυτά τα prefixes μπαίνουν εδώ' }, 'Jira keys ', h('input', { value: sp.keys, placeholder: 'π.χ. ISTA, V3',
+    h('label', { className: 'push' }, t('Όνομα ', 'Name '), h('input', { value: sp.name, onchange(e) { sp.name = e.target.value.trim(); save(); rerender(); } })),
+    h('label', { title: t('Τα νέα Jira tickets με αυτά τα prefixes μπαίνουν εδώ', 'New Jira tickets with these prefixes go here') }, 'Jira keys ', h('input', { value: sp.keys, placeholder: t('π.χ. ISTA, V3', 'e.g. ISTA, V3'),
       onchange(e) { sp.keys = e.target.value.toUpperCase().split(/[\s,]+/).filter(Boolean).join(', '); save(); rerender(); } })),
-    state.spaces.length > 1 ? confirmBtn('Διαγραφή project με τις στήλες και τα tickets του', () => {
+    state.spaces.length > 1 ? confirmBtn(t('Διαγραφή project με τις στήλες και τα tickets του', 'Delete project with its columns and tickets'), () => {
       const cols = spaceCols(sp.id).map(c => c.id);
       state.cards = state.cards.filter(c => !cols.includes(c.col));
       state.columns = state.columns.filter(c => c.space !== sp.id);
@@ -414,19 +429,19 @@ function renderKanban() {
   document.getElementById('kanban').replaceChildren(...spaceCols(state.space).map(col => {
     const el = h('div', { className: 'col' },
       h('div', { className: 'colhead' },
-        dragHandle('Σύρε για να μετακινήσεις τη στήλη', target => {
+        dragHandle(t('Σύρε για να μετακινήσεις τη στήλη', 'Drag to move the column'), target => {
           if (target === col) return;
           state.columns.splice(state.columns.indexOf(col), 1);
           state.columns.splice(state.columns.indexOf(target), 0, col);
           save(); renderKanban();
         }),
         h('input', { className: 'title', value: col.title, style: 'flex:1', onchange(e) { col.title = e.target.value; save(); } }),
-        confirmBtn('Διαγραφή στήλης και των tickets της', () => {
+        confirmBtn(t('Διαγραφή στήλης και των tickets της', 'Delete column and its tickets'), () => {
           state.columns = state.columns.filter(c => c !== col);
           state.cards = state.cards.filter(c => c.col !== col.id);
           save(); renderKanban();
         })),
-      h('input', { className: 'notify', value: col.notify, placeholder: 'Ειδοποίηση όταν μπαίνει εδώ ({ticket} = τίτλος)',
+      h('input', { className: 'notify', value: col.notify, placeholder: t('Ειδοποίηση όταν μπαίνει εδώ ({ticket} = τίτλος)', 'Notification when a ticket enters ({ticket} = title)'),
         onchange(e) { col.notify = e.target.value; save(); } }),
       ...state.cards.filter(c => c.col === col.id).map(renderCard),
       h('form', { onsubmit(e) {
@@ -435,7 +450,7 @@ function renderKanban() {
         if (!title) return;
         state.cards.push({ id: uid(), col: col.id, title, notes: '', branch: '', pr: '', priority: 'medium' });
         save(); renderKanban();
-      } }, h('input', { name: 't', placeholder: '+ Νέο ticket', style: 'width:100%' })));
+      } }, h('input', { name: 't', placeholder: t('+ Νέο ticket', '+ New ticket'), style: 'width:100%' })));
     el.dataset.id = col.id;
     return el;
   }));
@@ -445,7 +460,7 @@ function renderTodos() {
   document.getElementById('todoList').replaceChildren(...state.todos.map(t => h('li', { className: t.done ? 'done' : '' },
     h('input', { type: 'checkbox', checked: t.done, onchange() { t.done = !t.done; save(); renderTodos(); } }),
     h('span', { textContent: t.text }),
-    h('input', { type: 'datetime-local', value: t.remind || '', title: 'Υπενθύμιση', className: t.remind ? '' : 'unset',
+    h('input', { type: 'datetime-local', value: t.remind || '', title: t('Υπενθύμιση', 'Reminder'), className: t.remind ? '' : 'unset',
       onchange(e) { t.remind = e.target.value; e.target.className = t.remind ? '' : 'unset'; save(); } }),
     h('button', { className: 'del', textContent: '✕', onclick() { state.todos = state.todos.filter(x => x !== t); save(); renderTodos(); } }))));
 }
@@ -459,7 +474,7 @@ function checkReminders() {
   const todos = state.todos.filter(t => !t.done && isDue(t));
   const cards = boardBusy() ? [] : state.cards.filter(isDue);
   for (const [x, body] of [...todos.map(t => [t, t.text]), ...cards.map(c => [c, c.title])]) {
-    if (Notification.permission === 'granted') new Notification('⏰ Υπενθύμιση', { body });
+    if (Notification.permission === 'granted') new Notification(t('⏰ Υπενθύμιση', '⏰ Reminder'), { body });
     x.remind = '';
   }
   if (todos.length || cards.length) save();
@@ -476,7 +491,7 @@ document.getElementById('todoForm').onsubmit = e => {
   input.value = ''; save(); renderTodos();
 };
 document.getElementById('addCol').onclick = () => {
-  state.columns.push({ id: uid(), space: state.space, title: 'Νέα στήλη', notify: '' }); save(); renderKanban();
+  state.columns.push({ id: uid(), space: state.space, title: t('Νέα στήλη', 'New column'), notify: '' }); save(); renderKanban();
 };
 const tabs = { tabKanban: 'kanban', tabTodo: 'todo', tabSettings: 'settings' };
 for (const [btn, view] of Object.entries(tabs)) document.getElementById(btn).onclick = () => {

@@ -2,7 +2,7 @@
   "name": "ticket-organizer",
   "productName": "Ticket Organizer",
   "desktopName": "ticket-organizer.desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Personal Kanban board and todo list with Jira sync",
   "homepage": "https://github.com/leuterkilSchoox/ticket-organizer",
   "author": {
