@@ -1,0 +1,60 @@
+# Push a tag like v1.2.0 → builds .deb + .AppImage, attaches them to a GitHub Release,
+# and publishes a signed APT repo (latest version) to GitHub Pages.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build .deb and .AppImage
+        run: |
+          npm ci
+          npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+          npm run dist
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.deb dist/*.AppImage --generate-notes
+
+      - name: Build signed APT repo
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          mkdir site && cp dist/*.deb site/ && cd site
+          dpkg-scanpackages --multiversion . /dev/null > Packages
+          gzip -k9 Packages
+          apt-ftparchive -o APT::FTPArchive::Release::Origin=ticket-organizer release . > Release
+          gpg --batch --yes --clearsign -o InRelease Release
+          gpg --batch --yes -abs -o Release.gpg Release
+          gpg --export > ticket-organizer.gpg
+          echo '<a href="https://github.com/${{ github.repository }}">Ticket Organizer APT repo</a>' > index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

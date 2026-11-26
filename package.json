@@ -1,0 +1,36 @@
+{
+  "name": "ticket-organizer",
+  "productName": "Ticket Organizer",
+  "desktopName": "ticket-organizer.desktop",
+  "version": "1.0.0",
+  "description": "Personal Kanban board and todo list with Jira sync",
+  "homepage": "https://github.com/leuterkilSchoox/ticket-organizer",
+  "author": {
+    "name": "Eleftherios Charissopoulos",
+    "email": "150669231+leuterkilSchoox@users.noreply.github.com"
+  },
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --linux deb AppImage --publish never"
+  },
+  "build": {
+    "appId": "io.github.leuterkilschoox.ticket-organizer",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ],
+    "linux": {
+      "category": "Office",
+      "icon": "build/icon.png",
+      "executableName": "ticket-organizer",
+      "artifactName": "${name}_${version}_${arch}.${ext}",
+      "syncDesktopName": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^26.18.0"
+  }
+}

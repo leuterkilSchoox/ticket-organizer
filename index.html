@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<title>Ticket Organizer</title>
+<style>
+  /* full-height column layout so the board's horizontal scrollbar sits at the window bottom */
+  body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; gap: 12px; align-items: center; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header button.active, #spacebar button.active { background: var(--text); color: var(--surface); }
+  #spacebar { display: flex; gap: 8px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; font-size: 13px; }
+  #spacebar .push { margin-left: auto; }
+  #spacebar input { width: 160px; }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 4px 10px; }
+  input, textarea, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; box-sizing: border-box; }
+  .colors label { margin-left: 8px; font-size: 13px; }
+  #kanban { display: flex; gap: 12px; padding: 16px; overflow: auto; align-items: flex-start; flex: 1; min-height: 0; }
+  .col { background: var(--col); border-radius: 8px; padding: 8px; width: 320px; flex: none; min-height: 120px; }
+  .col.over { outline: 2px dashed var(--accent); }
+  .col > input { width: 100%; margin-bottom: 4px; }
+  .col .title { font-weight: 600; }
+  .colhead { display: flex; align-items: center; gap: 4px; }
+  .grip { color: var(--muted); padding: 0 2px; cursor: grab; font-size: 18px; user-select: none; }
+  .dragging { opacity: .5; }
+  .col .notify { font-size: 12px; }
+  .card { background: var(--surface); border-radius: 6px; padding: 8px; margin: 8px 0; border-left: 6px solid; box-shadow: 0 1px 2px #0002; }
+  .card .row { display: flex; gap: 6px; align-items: center; }
+  .card .row input, .colhead input { flex: 1; min-width: 0; }
+  .card .row input { font-weight: 500; border-color: transparent; }
+  .card textarea { width: 100%; margin-top: 6px; field-sizing: content; resize: none; }
+  .card .summary { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .card .summary .branchText { flex: 1; min-width: 0; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .toggle { padding: 0 2px; }
+  .card .meta { display: flex; gap: 6px; margin-top: 6px; font-size: 12px; }
+  .card .meta select { font-size: 12px; }
+  .card .branch { flex: 1; min-width: 0; font-family: monospace; font-size: 12px; }
+  .card .pr { flex: 1; min-width: 0; font-size: 12px; }
+  .card .meta .jira { align-self: center; }
+  .jira { text-decoration: none; color: var(--accent); font-weight: bold; }
+  .del { border: none; background: none; color: var(--muted); }
+  #todo { max-width: 600px; width: calc(100% - 32px); margin: 24px auto; }
+  #todo li { list-style: none; display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+  #todo li.done span { text-decoration: line-through; color: var(--muted); }
+  #todo li span { flex: 1; }
+  #todo li input.unset { opacity: .4; }
+  #settings { max-width: 600px; width: calc(100% - 32px); margin: 24px auto; }
+  #settings label { display: block; margin-bottom: 16px; font-weight: 500; }
+  #settings textarea { field-sizing: content; resize: none; }
+  #settings input, #settings textarea { display: block; width: 100%; margin-top: 4px; font-family: monospace; }
+  #settings small { display: block; color: var(--muted); font-weight: normal; margin-top: 2px; }
+  #settings select { display: block; margin-top: 4px; }
+  #customTheme { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; margin-bottom: 16px; }
+  #customTheme input { display: inline; width: 48px; margin: 0; padding: 0 2px; }
+  #settings .error { color: #b71c1c; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <button id="tabKanban" class="active">Kanban</button>
+  <button id="tabTodo">Todo</button>
+  <button id="tabSettings">Ρυθμίσεις</button>
+  <button id="addCol">+ Στήλη</button>
+  <button id="enableNotif" hidden>Ενεργοποίηση ειδοποιήσεων</button>
+  <span class="colors" id="colors"></span>
+</header>
+<div id="spacebar"></div>
+<main id="kanban"></main>
+<main id="todo" hidden>
+  <form id="todoForm"><input id="todoInput" placeholder="Νέο todo…" style="width:100%"></form>
+  <ul id="todoList" style="padding:0"></ul>
+</main>
+<main id="settings" hidden>
+  <label>Θέμα
+    <select id="theme"></select>
+  </label>
+  <div id="customTheme"></div>
+  <label>Jira URL
+    <input id="jiraUrl">
+    <small>Ο κωδικός του ticket (π.χ. ISTA-1234) μπαίνει στο τέλος. Δέχεται και paste ενός link ticket.</small>
+  </label>
+  <label>PR URL (default repo)
+    <input id="prUrl">
+    <small>Ο αριθμός του PR μπαίνει στο τέλος. Δέχεται και paste ενός link PR. Για άλλο repo στην κάρτα γράφεις &lt;repo&gt;#123.</small>
+  </label>
+  <label>Jenkins URL
+    <input id="jenkinsUrl">
+    <small>Το branch του ticket μπαίνει στο τέλος. Δέχεται και paste ενός link job.</small>
+  </label>
+  <label>Jira email
+    <input id="jiraEmail">
+  </label>
+  <label>Jira API token
+    <input id="jiraToken" type="password">
+    <small>Από id.atlassian.com → Security → API tokens. Αποθηκεύεται κρυπτογραφημένο.</small>
+  </label>
+  <label>Jira JQL για νέα tickets
+    <textarea id="jiraJql"></textarea>
+    <small>Κάθε 5 λεπτά, όσα tickets δεν υπάρχουν σε κάρτα (με βάση το key στον τίτλο) μπαίνουν στη στήλη Backlog (ή στην πρώτη στήλη) του project που έχει το prefix τους στα Jira keys (αλλιώς του πρώτου project).</small>
+    <small id="jiraStatus"></small>
+  </label>
+  <p class="error" id="settingsError"></p>
+</main>
+
+<script>
+const PRIORITIES = ['low', 'medium', 'high', 'critical'];
+
+// 2-week sprints anchored on Mon 2 Nov 2026, labelled Mon–Fri (weekends excluded); card.sprint stores the sprint's start date (YYYY-MM-DD)
+const SPRINT_ANCHOR = Date.UTC(2026, 10, 2), SPRINT_MS = 14 * 864e5;
+const isoDate = d => d.toISOString().slice(0, 10); // d is a UTC-midnight Date
+const fmtDate = iso => { const [, m, d] = iso.split('-').map(Number); return `${d}/${m}`; };
+const sprintLabel = iso => `${fmtDate(iso)} – ${fmtDate(isoDate(new Date(Date.parse(iso) + 11 * 864e5)))}`;
+function sprintOptions(selected) {
+  const now = new Date(), today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const cur = Math.floor((today - SPRINT_ANCHOR) / SPRINT_MS);
+  const opts = [0, 1, 2, 3, 4, 5].map(i => isoDate(new Date(SPRINT_ANCHOR + (cur + i) * SPRINT_MS)));
+  if (selected && !opts.includes(selected)) opts.unshift(selected); // keep a past sprint visible
+  return opts;
+}
+const KEY = 'ticket-organizer';
+const uid = () => crypto.randomUUID();
+
+// ponytail: localStorage only — clearing browser data wipes it; add JSON export if that ever bites
+let state = JSON.parse(localStorage.getItem(KEY) || 'null') || {
+  columns: [
+    { id: uid(), title: 'To Do', notify: '' },
+    { id: uid(), title: 'In Progress', notify: 'Ξεκίνησες το {ticket}' },
+    { id: uid(), title: 'Code Review', notify: 'Το {ticket} πήγε για review — στείλε link στο Slack' },
+    { id: uid(), title: 'Done', notify: '🎉 Τέλος το {ticket}' },
+  ],
+  cards: [],
+  todos: [],
+  colors: { low: '#4caf50', medium: '#ffb300', high: '#f4511e', critical: '#b71c1c' },
+};
+// defaults first so settings added later also reach older saves
+state.settings = {
+  jiraUrl: 'https://your-company.atlassian.net/browse/',
+  prUrl: 'https://github.com/your-org/your-repo/pull/',
+  jenkinsUrl: 'https://jenkins.example.com/job/your-repo/job/',
+  jiraEmail: '',
+  jiraJql: "assignee = currentUser() AND (type = 'defect' OR type = 'bug' OR type = 'Internal Task' OR type = 'Task') AND (status = 'In Progress' OR status = 'Open' OR status = 'Investigating' OR status = 'Planning')",
+  ...state.settings,
+};
+// older saves have one board: it becomes the first project space
+if (!state.spaces) {
+  state.spaces = [{ id: uid(), name: 'Project', keys: '' }];
+  for (const c of state.columns) c.space = state.spaces[0].id;
+}
+if (!state.spaces.some(s => s.id === state.space)) state.space = state.spaces[0].id;
+const spaceCols = id => state.columns.filter(c => c.space === id);
+const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+const h = (tag, props = {}, ...kids) => { const el = Object.assign(document.createElement(tag), props); el.append(...kids); return el; };
+
+// native confirm() breaks keyboard input in Electron afterwards, so confirm in-page with a second click
+function confirmBtn(title, onConfirm) {
+  return h('button', { className: 'del', title, textContent: '✕', onclick(e) {
+    const btn = e.currentTarget;
+    if (btn.textContent === 'Σίγουρα;') return onConfirm();
+    btn.textContent = 'Σίγουρα;';
+    setTimeout(() => { btn.textContent = '✕'; }, 3000);
+  } });
+}
+
+// pointer-based drag: native HTML5 drag & drop gets cancelled mid-drag in Electron on X11
+function dragHandle(title, onDrop) {
+  return h('span', { className: 'grip', textContent: '⠿', title, onpointerdown(e) {
+    e.preventDefault();
+    const src = e.target.closest('.card, .col');
+    src.classList.add('dragging');
+    let over;
+    const move = ev => {
+      over?.classList.remove('over');
+      over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.col');
+      over?.classList.add('over');
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', () => {
+      document.removeEventListener('pointermove', move);
+      src.classList.remove('dragging');
+      over?.classList.remove('over');
+      const target = state.columns.find(c => c.id === over?.dataset.id);
+      if (target) onDrop(target);
+    }, { once: true });
+  } });
+}
+
+function notify(col, card) {
+  if (!col.notify.trim() || Notification.permission !== 'granted') return;
+  new Notification(col.title, { body: col.notify.replaceAll('{ticket}', card.title) });
+}
+
+function renderColors() {
+  const box = document.getElementById('colors');
+  box.replaceChildren('Χρώματα priority:', ...PRIORITIES.map(p => h('label', {}, p + ' ',
+    h('input', { type: 'color', value: state.colors[p], oninput(e) { state.colors[p] = e.target.value; save(); renderKanban(); } }))));
+}
+
+function jiraLink(title) {
+  const key = title.match(/\b[A-Z][A-Z0-9]+-\d+\b/)?.[0];
+  return key ? link(state.settings.jiraUrl + key, `Άνοιγμα ${key} στο Jira`) : '';
+}
+
+// card.pr is a ", "-separated list of "2419" (default repo from settings.prUrl) or "<repo>#<number>" for another repo of the same org
+// settings.prUrl looks like https://github.com/<org>/<repo>/pull/ → [org base, default repo]
+const prBase = () => state.settings.prUrl.match(/^(.*\/)([^/]+)\/pull\/$/).slice(1);
+function parsePr(value) {
+  const m = value.match(/\/([\w.-]+)\/pull\/(\d+)/) || value.trim().match(/^(?:([\w.-]+)#)?(\d+)$/);
+  if (!m) return '';
+  return !m[1] || m[1] === prBase()[1] ? m[2] : `${m[1]}#${m[2]}`;
+}
+const parsePrs = value => value.split(/[\s,]+/).map(parsePr).filter(Boolean).join(', ');
+const prList = prs => prs ? prs.split(', ') : [];
+const prUrl = pr => {
+  const [org, defaultRepo] = prBase();
+  const [repo, n] = pr.includes('#') ? pr.split('#') : [defaultRepo, pr];
+  return `${org}${repo}/pull/${n}`;
+};
+
+// normalize pasted links to a base URL; returns null when it doesn't look right
+function normalizeSetting(id, value) {
+  const v = value.trim();
+  if (id === 'jiraJql') return v || null;
+  if (id === 'jiraEmail') return /^\S+@\S+$/.test(v) ? v : null;
+  if (!v.startsWith('https://')) return null;
+  if (id === 'jiraUrl') return v.replace(/[A-Z][A-Z0-9]+-\d+\/?$/, '').replace(/\/?$/, '/');
+  // keeps https://…/job/<repo>/job/ from either the base or a pasted branch job link
+  if (id === 'jenkinsUrl') return (v + '/').match(/^https:\/\/.+?\/job\/[^/]+\/job\//)?.[0] ?? null;
+  const pr = v.replace(/\/pull(\/\d+)?.*$/, '/pull/');
+  return /^https:\/\/.+\/[^/]+\/pull\/$/.test(pr) ? pr : null;
+}
+const THEME_VARS = { bg: 'Φόντο', col: 'Στήλες', surface: 'Κάρτες / πεδία', text: 'Κείμενο', muted: 'Δευτερεύον κείμενο', border: 'Περιγράμματα', accent: 'Links / έμφαση' };
+const THEMES = {
+  light: { name: 'Light', bg: '#f4f5f7', col: '#ebecf0', surface: '#ffffff', text: '#172b4d', muted: '#6b778c', border: '#cccccc', accent: '#0052cc' },
+  'catppuccin-latte': { name: 'Catppuccin Latte', bg: '#e6e9ef', col: '#dce0e8', surface: '#eff1f5', text: '#4c4f69', muted: '#7c7f93', border: '#bcc0cc', accent: '#1e66f5' },
+  'catppuccin-mocha': { name: 'Catppuccin Mocha', bg: '#1e1e2e', col: '#181825', surface: '#313244', text: '#cdd6f4', muted: '#9399b2', border: '#45475a', accent: '#89b4fa' },
+  darcula: { name: 'Darcula', bg: '#2b2b2b', col: '#313335', surface: '#3c3f41', text: '#a9b7c6', muted: '#808080', border: '#555555', accent: '#589df6' },
+  dracula: { name: 'Dracula', bg: '#282a36', col: '#21222c', surface: '#44475a', text: '#f8f8f2', muted: '#a4b1d6', border: '#6272a4', accent: '#bd93f9' },
+  nord: { name: 'Nord', bg: '#2e3440', col: '#3b4252', surface: '#434c5e', text: '#eceff4', muted: '#a8b2c3', border: '#4c566a', accent: '#88c0d0' },
+  gruvbox: { name: 'Gruvbox', bg: '#282828', col: '#1d2021', surface: '#3c3836', text: '#ebdbb2', muted: '#a89984', border: '#504945', accent: '#83a598' },
+  'tokyo-night': { name: 'Tokyo Night', bg: '#1a1b26', col: '#16161e', surface: '#24283b', text: '#c0caf5', muted: '#9aa5ce', border: '#414868', accent: '#7aa2f7' },
+};
+const isDark = hex => { const n = parseInt(hex.slice(1), 16); return (n >> 16) * 299 + (n >> 8 & 255) * 587 + (n & 255) * 114 < 128000; };
+function setThemeVars(t) {
+  for (const k in THEME_VARS) document.documentElement.style.setProperty('--' + k, t[k]);
+  // native widgets (date picker, scrollbars, select popups) follow light/dark
+  document.documentElement.style.colorScheme = isDark(t.bg) ? 'dark' : 'light';
+}
+function applyTheme() {
+  const t = state.theme === 'custom' ? state.customTheme : THEMES[state.theme] || THEMES.light;
+  setThemeVars(t);
+  // the color inputs aren't rebuilt while picking, so the open picker stays put
+  document.getElementById('customTheme').replaceChildren(...state.theme !== 'custom' ? [] : Object.entries(THEME_VARS).flatMap(([k, label]) => [
+    h('span', { textContent: label }),
+    h('input', { type: 'color', value: t[k], oninput(e) { t[k] = e.target.value; save(); setThemeVars(t); } })]));
+}
+const themeSelect = document.getElementById('theme');
+themeSelect.append(...Object.entries(THEMES).map(([id, t]) => h('option', { value: id, textContent: t.name })), h('option', { value: 'custom', textContent: 'Custom' }));
+themeSelect.value = state.theme || 'light';
+themeSelect.onchange = () => {
+  // custom starts as a copy of the theme you were on
+  if (themeSelect.value === 'custom' && !state.customTheme) state.customTheme = { ...THEMES[state.theme] || THEMES.light, name: undefined };
+  state.theme = themeSelect.value; save(); applyTheme();
+};
+applyTheme();
+
+for (const id of ['jiraUrl', 'prUrl', 'jenkinsUrl', 'jiraEmail', 'jiraJql']) {
+  const input = document.getElementById(id);
+  input.value = state.settings[id];
+  input.onchange = () => {
+    const v = normalizeSetting(id, input.value);
+    document.getElementById('settingsError').textContent = v ? '' : `Μη έγκυρη τιμή: ${input.value}`;
+    if (v) { state.settings[id] = v; save(); renderKanban(); }
+    input.value = state.settings[id];
+  };
+}
+
+const tokenInput = document.getElementById('jiraToken');
+const showToken = () => jira.hasToken().then(has => { tokenInput.placeholder = has ? 'Αποθηκευμένο — γράψε νέο για αλλαγή' : ''; });
+tokenInput.onchange = () => {
+  const token = tokenInput.value.trim();
+  tokenInput.value = '';
+  if (token) jira.setToken(token).then(() => { showToken(); syncJira(); });
+};
+showToken();
+
+// adds Jira tickets whose key isn't in any card title (titles may have extra words) to the Backlog column
+async function syncJira() {
+  const status = document.getElementById('jiraStatus');
+  if (!state.settings.jiraEmail || !await jira.hasToken()) return;
+  try {
+    const issues = await jira.search(new URL(state.settings.jiraUrl).origin, state.settings.jiraEmail, state.settings.jiraJql);
+    if (boardBusy()) return; // try again next round
+    // the space whose Jira keys include the ticket's prefix (else the first space), then its Backlog (else first) column
+    const colFor = key => {
+      const sp = state.spaces.find(s => s.keys.split(', ').includes(key.split('-')[0].toUpperCase())) || state.spaces[0];
+      const cols = spaceCols(sp.id);
+      return cols.find(c => /backlog/i.test(c.title)) || cols[0];
+    };
+    const added = issues.filter(i => colFor(i.key) && !state.cards.some(c => new RegExp(`\\b${i.key}\\b`, 'i').test(c.title)));
+    for (const i of added) {
+      state.cards.push({ id: uid(), col: colFor(i.key).id, title: `${i.key} ${i.summary}`, notes: '', branch: '', pr: '', priority: 'medium' });
+      if (Notification.permission === 'granted') new Notification('Νέο Jira ticket', { body: `${i.key} ${i.summary}` });
+    }
+    if (added.length) { save(); renderKanban(); }
+    status.textContent = `Τελευταίος έλεγχος ${new Date().toLocaleTimeString()}: ${added.length} νέα`;
+  } catch (e) {
+    status.textContent = `Σφάλμα Jira: ${e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`;
+  }
+}
+setInterval(syncJira, 5 * 60e3);
+
+// Clicking a button while a text field has unsaved edits fires `change` (→ re-render) between
+// mousedown and mouseup, which replaces the button and swallows the click. Text fields call
+// rerender() instead, which waits until the pointer is released.
+let pointerDown = false, renderPending = false;
+document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+document.addEventListener('pointerup', () => {
+  pointerDown = false;
+  if (renderPending) setTimeout(() => { renderPending = false; renderKanban(); });
+}, true);
+const rerender = () => pointerDown ? (renderPending = true) : renderKanban();
+
+const link = (href, title) => h('a', { className: 'jira', href, target: '_blank', textContent: '↗', title });
+
+function copyBtn(getValue) {
+  return h('button', { className: 'del', title: 'Αντιγραφή branch', textContent: '⧉', onclick(e) {
+    const btn = e.currentTarget, value = getValue().trim();
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+      btn.textContent = '✓';
+      setTimeout(() => { btn.textContent = '⧉'; }, 1500);
+    });
+  } });
+}
+
+// closed (default): read-only PR/branch line; open: editable priority, PR and branch. Notes show in both.
+function renderCard(card) {
+  const prLink = pr => link(prUrl(pr), `Άνοιγμα PR ${prUrl(pr)}`);
+  const jenkinsLink = card.branch ? link(state.settings.jenkinsUrl + encodeURIComponent(card.branch) + '/', 'Άνοιγμα στο Jenkins') : '';
+  const details = card.open ? [
+    h('div', { className: 'meta' },
+      h('select', { onchange(e) { card.priority = e.target.value; save(); renderKanban(); } },
+        ...PRIORITIES.map(p => h('option', { value: p, selected: p === card.priority }, p))),
+      h('input', { className: 'pr', placeholder: 'PR # ή URL (πολλά με κόμμα)', title: '2419 = default repo, <repo>#123 ή paste του URL για άλλο repo. Πολλά PRs χωρισμένα με κόμμα',
+        value: card.pr ?? '', onchange(e) { card.pr = parsePrs(e.target.value); save(); rerender(); } }),
+      ...prList(card.pr).map(prLink)),
+    h('div', { className: 'meta' },
+      h('input', { className: 'branch', placeholder: 'branch', value: card.branch ?? '', onchange(e) { card.branch = e.target.value.trim(); save(); rerender(); } }),
+      copyBtn(() => card.branch),
+      jenkinsLink),
+    h('div', { className: 'meta' },
+      h('label', {}, 'Due ', h('input', { type: 'date', value: card.due ?? '', onchange(e) { card.due = e.target.value; save(); } })),
+      h('label', {}, 'Sprint ', h('select', { onchange(e) { card.sprint = e.target.value; save(); } },
+        h('option', { value: '' }, '—'),
+        ...sprintOptions(card.sprint).map(s => h('option', { value: s, selected: s === card.sprint }, sprintLabel(s))))),
+      h('label', {}, h('input', { type: 'checkbox', checked: !!card.ukg, onchange(e) { card.ukg = e.target.checked; save(); } }), ' UKG flag')),
+    h('div', { className: 'meta' },
+      h('label', {}, 'Υπενθύμιση ', h('input', { type: 'datetime-local', value: card.remind ?? '', onchange(e) { card.remind = e.target.value; save(); } }))),
+  ] : [
+    card.remind ? h('div', { className: 'summary' }, h('span', { title: 'Υπενθύμιση' }, `⏰ ${fmtDate(card.remind.slice(0, 10))} ${card.remind.slice(11)}`)) : '',
+    card.due || card.sprint || card.ukg ? h('div', { className: 'summary' },
+      card.ukg ? h('span', { title: 'Χρειάζεται UKG flag' }, '⚑ UKG') : '',
+      card.due ? h('span', { title: 'Due date' }, '📅 ' + fmtDate(card.due)) : '',
+      card.sprint ? h('span', { title: 'Sprint' }, 'Sprint ' + sprintLabel(card.sprint)) : '') : '',
+    card.pr || card.branch ? h('div', { className: 'summary' },
+      ...prList(card.pr).map(pr => h('span', { className: 'prText' }, pr.includes('#') ? pr : '#' + pr, ' ', prLink(pr))),
+      card.branch ? h('span', { className: 'branchText', title: card.branch, textContent: '⎇ ' + card.branch }) : '',
+      card.branch ? copyBtn(() => card.branch) : '',
+      jenkinsLink) : '',
+  ];
+  return h('div', {
+    className: 'card', style: `border-left-color:${state.colors[card.priority]}; background:${state.colors[card.priority]}18`,
+  },
+    h('div', { className: 'row' },
+      dragHandle('Σύρε για να μετακινήσεις το ticket', target => {
+        if (target.id === card.col) return;
+        card.col = target.id; save(); renderKanban(); notify(target, card);
+      }),
+      h('button', { className: 'del toggle', textContent: card.open ? '▾' : '▸', title: card.open ? 'Λιγότερα' : 'Περισσότερα',
+        onclick() { card.open = !card.open; save(); renderKanban(); } }),
+      h('input', { value: card.title, onchange(e) { card.title = e.target.value; save(); rerender(); } }),
+      jiraLink(card.title),
+      confirmBtn('Διαγραφή', () => { state.cards = state.cards.filter(c => c !== card); save(); renderKanban(); })),
+    ...details,
+    h('textarea', { placeholder: 'Σημειώσεις…', value: card.notes, onchange(e) { card.notes = e.target.value; save(); } }));
+}
+
+// project spaces: each owns the columns with col.space === its id (cards follow their column)
+function renderSpaces() {
+  const sp = state.spaces.find(s => s.id === state.space);
+  const go = id => { state.space = id; save(); renderKanban(); };
+  document.getElementById('spacebar').replaceChildren(
+    ...state.spaces.map(s => h('button', { className: s === sp ? 'active' : '', textContent: s.name || '—', onclick: () => go(s.id) })),
+    h('button', { textContent: '+ Project', title: 'Νέο project με τις ίδιες στήλες (χωρίς tickets)', onclick() {
+      const s = { id: uid(), name: 'Νέο project', keys: '' };
+      state.spaces.push(s);
+      state.columns.push(...spaceCols(sp.id).map(c => ({ ...c, id: uid(), space: s.id })));
+      go(s.id);
+    } }),
+    h('label', { className: 'push' }, 'Όνομα ', h('input', { value: sp.name, onchange(e) { sp.name = e.target.value.trim(); save(); rerender(); } })),
+    h('label', { title: 'Τα νέα Jira tickets με αυτά τα prefixes μπαίνουν εδώ' }, 'Jira keys ', h('input', { value: sp.keys, placeholder: 'π.χ. ISTA, V3',
+      onchange(e) { sp.keys = e.target.value.toUpperCase().split(/[\s,]+/).filter(Boolean).join(', '); save(); rerender(); } })),
+    state.spaces.length > 1 ? confirmBtn('Διαγραφή project με τις στήλες και τα tickets του', () => {
+      const cols = spaceCols(sp.id).map(c => c.id);
+      state.cards = state.cards.filter(c => !cols.includes(c.col));
+      state.columns = state.columns.filter(c => c.space !== sp.id);
+      state.spaces = state.spaces.filter(s => s !== sp);
+      go(state.spaces[0].id);
+    }) : '');
+}
+
+function renderKanban() {
+  renderSpaces();
+  document.getElementById('kanban').replaceChildren(...spaceCols(state.space).map(col => {
+    const el = h('div', { className: 'col' },
+      h('div', { className: 'colhead' },
+        dragHandle('Σύρε για να μετακινήσεις τη στήλη', target => {
+          if (target === col) return;
+          state.columns.splice(state.columns.indexOf(col), 1);
+          state.columns.splice(state.columns.indexOf(target), 0, col);
+          save(); renderKanban();
+        }),
+        h('input', { className: 'title', value: col.title, style: 'flex:1', onchange(e) { col.title = e.target.value; save(); } }),
+        confirmBtn('Διαγραφή στήλης και των tickets της', () => {
+          state.columns = state.columns.filter(c => c !== col);
+          state.cards = state.cards.filter(c => c.col !== col.id);
+          save(); renderKanban();
+        })),
+      h('input', { className: 'notify', value: col.notify, placeholder: 'Ειδοποίηση όταν μπαίνει εδώ ({ticket} = τίτλος)',
+        onchange(e) { col.notify = e.target.value; save(); } }),
+      ...state.cards.filter(c => c.col === col.id).map(renderCard),
+      h('form', { onsubmit(e) {
+        e.preventDefault();
+        const title = e.target.t.value.trim();
+        if (!title) return;
+        state.cards.push({ id: uid(), col: col.id, title, notes: '', branch: '', pr: '', priority: 'medium' });
+        save(); renderKanban();
+      } }, h('input', { name: 't', placeholder: '+ Νέο ticket', style: 'width:100%' })));
+    el.dataset.id = col.id;
+    return el;
+  }));
+}
+
+function renderTodos() {
+  document.getElementById('todoList').replaceChildren(...state.todos.map(t => h('li', { className: t.done ? 'done' : '' },
+    h('input', { type: 'checkbox', checked: t.done, onchange() { t.done = !t.done; save(); renderTodos(); } }),
+    h('span', { textContent: t.text }),
+    h('input', { type: 'datetime-local', value: t.remind || '', title: 'Υπενθύμιση', className: t.remind ? '' : 'unset',
+      onchange(e) { t.remind = e.target.value; e.target.className = t.remind ? '' : 'unset'; save(); } }),
+    h('button', { className: 'del', textContent: '✕', onclick() { state.todos = state.todos.filter(x => x !== t); save(); renderTodos(); } }))));
+}
+
+// a board re-render would drop text being typed in a card, so board updates wait while a field there is focused
+const boardBusy = () => document.activeElement?.matches('#kanban input, #kanban textarea, #kanban select, #spacebar input');
+
+// fires due todo and card reminders (also ones missed while the app was closed) once, then clears them
+function checkReminders() {
+  const isDue = x => x.remind && new Date(x.remind) <= new Date();
+  const todos = state.todos.filter(t => !t.done && isDue(t));
+  const cards = boardBusy() ? [] : state.cards.filter(isDue);
+  for (const [x, body] of [...todos.map(t => [t, t.text]), ...cards.map(c => [c, c.title])]) {
+    if (Notification.permission === 'granted') new Notification('⏰ Υπενθύμιση', { body });
+    x.remind = '';
+  }
+  if (todos.length || cards.length) save();
+  if (todos.length) renderTodos();
+  if (cards.length) renderKanban();
+}
+setInterval(checkReminders, 30000);
+
+document.getElementById('todoForm').onsubmit = e => {
+  e.preventDefault();
+  const input = document.getElementById('todoInput');
+  if (!input.value.trim()) return;
+  state.todos.push({ id: uid(), text: input.value.trim(), done: false });
+  input.value = ''; save(); renderTodos();
+};
+document.getElementById('addCol').onclick = () => {
+  state.columns.push({ id: uid(), space: state.space, title: 'Νέα στήλη', notify: '' }); save(); renderKanban();
+};
+const tabs = { tabKanban: 'kanban', tabTodo: 'todo', tabSettings: 'settings' };
+for (const [btn, view] of Object.entries(tabs)) document.getElementById(btn).onclick = () => {
+  for (const [b, v] of Object.entries(tabs)) {
+    document.getElementById(b).classList.toggle('active', b === btn);
+    document.getElementById(v).hidden = v !== view;
+  }
+  document.getElementById('addCol').hidden = document.getElementById('spacebar').hidden = view !== 'kanban';
+};
+const notifBtn = document.getElementById('enableNotif');
+notifBtn.hidden = Notification.permission === 'granted';
+notifBtn.onclick = () => Notification.requestPermission().then(p => { notifBtn.hidden = p === 'granted'; });
+
+renderColors(); renderKanban(); renderTodos(); checkReminders(); syncJira();
+</script>
+</body>
+</html>
